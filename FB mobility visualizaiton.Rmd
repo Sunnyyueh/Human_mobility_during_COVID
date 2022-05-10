@@ -1,0 +1,141 @@
+---
+title: "FB human mobility data visualization 2022 Jan - Mar"
+author: "Yun Yueh (Sunny)"
+date: "5/10/2022"
+output: html_document
+---
+
+```{r,results="hide",message=FALSE, warning=FALSE}
+library(tidyverse) ;library(plyr) ;library(readr); library(igraph);library(stringr);library(network)
+library(diagram)  ;library(plotrix);library("GGally")
+invisible(lapply(c("ggplot2", "maps", "network", "sna"), base::library, character.only = TRUE))
+```
+
+```{r,results="hide",message=FALSE, warning=FALSE}
+
+mydir = "/Users/sunnyyueh/Desktop/論文/11622655397921190_2021-01-01_2021-03-01_csv"
+myfiles = list.files(path=mydir, pattern="*.csv", full.names=TRUE)
+
+dat_csv = ldply(myfiles, read_csv)
+```
+
+```{r}
+FB = dat_csv 
+FB$polygon1_name=str_to_title(FB$polygon1_name)
+FB$polygon2_name=str_to_title(FB$polygon2_name)
+
+Jan = FB[grep("2021-01",FB$ds),]
+Feb = FB[grep("2021-02",FB$ds),]
+Mar = FB[grep("2021-03",FB$ds),]
+
+FB_edge=FB[c('polygon1_name','polygon2_name','metric_value')]
+Jan_edge=Jan[c('polygon1_name','polygon2_name','metric_value')]
+Feb_edge=Feb[c('polygon1_name','polygon2_name','metric_value')]
+Mar_edge=Mar[c('polygon1_name','polygon2_name','metric_value')]
+
+Jan_g<- graph.data.frame(Jan_edge,directed = F)
+Feb_g<- graph.data.frame(Feb_edge,directed = F)
+Mar_g<- graph.data.frame(Mar_edge,directed = F)
+FB_g<- graph.data.frame(FB_edge,directed = F)
+
+FB_adj<- get.adjacency(FB_g,sparse = F)
+Jan_adj<- get.adjacency(Jan_g,sparse = F);heatmap(Jan_adj,Colv = NA, Rowv = NA,,main="Jan")
+Feb_adj<- get.adjacency(Feb_g,sparse = F);heatmap(Feb_adj,Colv = NA, Rowv = NA,main="Feb")
+Mar_adj<- get.adjacency(Mar_g,sparse = F);heatmap(Mar_adj,Colv = NA, Rowv = NA,main="Mar")
+
+
+
+Jan_nw=network(Jan_adj,directed = TRUE)
+Jan_nw=network(Jan_edge,directed = TRUE,multiple=TRUE)
+
+Jan_nw %v% "lat" <- as.numeric(Jan$latitude1)
+Jan_nw %v% "lon" <- as.numeric(Jan$longitude1)
+Jan_nw %v% "Country"<-Jan$polygon1_name
+
+```
+
+```{r}
+
+## JAN
+Jan_edges <- get.data.frame(Jan_g)
+
+edges_for_plot=merge(x = Jan_edges, y = Jan[c("polygon1_name", "longitude1", "latitude1")], by.x="from",by.y='polygon1_name',all.x=TRUE)
+edges_for_plot=edges_for_plot %>% distinct(from, to,metric_value, .keep_all = TRUE)
+edges_for_plot=merge(x = edges_for_plot, y = Jan[c("polygon2_name", "longitude2", "latitude2")], by.x="to",by.y='polygon2_name',all.x=TRUE)
+edges_for_plot_Jan=edges_for_plot %>% distinct(from, to,metric_value, .keep_all = TRUE)
+
+
+## FEB
+Feb_edges <- get.data.frame(Feb_g)
+
+edges_for_plot=merge(x = Feb_edges, y = Jan[c("polygon1_name", "longitude1", "latitude1")], by.x="from",by.y='polygon1_name',all.x=TRUE)
+edges_for_plot=edges_for_plot %>% distinct(from, to,metric_value, .keep_all = TRUE)
+edges_for_plot=merge(x = edges_for_plot, y = Jan[c("polygon2_name", "longitude2", "latitude2")], by.x="to",by.y='polygon2_name',all.x=TRUE)
+edges_for_plot_Feb=edges_for_plot %>% distinct(from, to,metric_value, .keep_all = TRUE)
+
+
+## MAR
+Mar_edges <- get.data.frame(Mar_g)
+
+edges_for_plot=merge(x = Mar_edges, y = Jan[c("polygon1_name", "longitude1", "latitude1")], by.x="from",by.y='polygon1_name',all.x=TRUE)
+edges_for_plot=edges_for_plot %>% distinct(from, to,metric_value, .keep_all = TRUE)
+edges_for_plot=merge(x = edges_for_plot, y = Jan[c("polygon2_name", "longitude2", "latitude2")], by.x="to",by.y='polygon2_name',all.x=TRUE)
+edges_for_plot_Mar=edges_for_plot %>% distinct(from, to,metric_value, .keep_all = TRUE)
+
+
+```
+
+```{r}
+data("world.cities")
+
+world <- fortify(maps::map("world", plot = FALSE, fill = TRUE))
+
+maptheme <- theme(panel.grid = element_blank()) +
+  theme(axis.text = element_blank()) +
+  theme(axis.ticks = element_blank()) +
+  theme(axis.title = element_blank()) +
+  theme(legend.position = "bottom") +
+  theme(panel.grid = element_blank()) +
+  theme(panel.background = element_blank()) +
+  theme(plot.margin = unit(c(0, 0, 0.5, 0), 'cm'))
+
+
+ggplot(world,aes(x = long, y = lat))+
+  geom_polygon(aes(group = group), color = "grey65",
+               fill = "#f9f9f9", size = 0.2)+
+  geom_curve(edges_for_plot_Jan,mapping=aes(x=longitude1,y=latitude1, xend = longitude2, yend = latitude2),
+             alpha = 0.5,color="lightblue",size=edges_for_plot_Jan$metric_value/10000,curvature = 0.1) +
+  geom_point(Jan,mapping=aes(x=longitude1,y=latitude1),shape = 21, color='darkgoldenrod1',fill = 'darkgoldenrod1',size=3,alpha=0.5)+
+  geom_text(Jan,mapping=aes(x=longitude1,y=latitude1, label = polygon1_name),             # draw text labels
+            size = 2, color = "black",check_overlap = TRUE,fontface = "bold") +
+  ggtitle("January 2020 human mobility") +
+  theme(plot.title = element_text(size=14, face="bold"))+
+  maptheme
+
+ggplot(world,aes(x = long, y = lat))+
+  geom_polygon(aes(group = group), color = "grey65",
+               fill = "#f9f9f9", size = 0.2)+
+  geom_curve(edges_for_plot_Feb,mapping=aes(x=longitude1,y=latitude1, xend = longitude2, yend = latitude2),
+             alpha = 0.5,color="lightblue",size=edges_for_plot_Feb$metric_value/10000,curvature = 0.1) +
+  geom_point(Feb,mapping=aes(x=longitude1,y=latitude1),shape = 21, color='darkgoldenrod1',fill = 'darkgoldenrod1',size=3,alpha=0.5)+
+  geom_text(Feb,mapping=aes(x=longitude1,y=latitude1, label = polygon1_name),             # draw text labels
+            size = 2, color = "black",check_overlap = TRUE,fontface = "bold") +
+  ggtitle("Febuary 2020 human mobility") +
+  theme(plot.title = element_text(size=14, face="bold"))+
+  maptheme
+
+
+
+ggplot(world,aes(x = long, y = lat))+
+  geom_polygon(aes(group = group), color = "grey65",
+               fill = "#f9f9f9", size = 0.2)+
+  geom_curve(edges_for_plot_Mar,mapping=aes(x=longitude1,y=latitude1, xend = longitude2, yend = latitude2),
+             alpha = 0.5,color="lightblue",size=edges_for_plot_Mar$metric_value/10000,curvature = 0.1) +
+  geom_point(Mar,mapping=aes(x=longitude1,y=latitude1),shape = 21, color='darkgoldenrod1',fill = 'darkgoldenrod1',size=3,alpha=0.5)+
+  geom_text(Mar,mapping=aes(x=longitude1,y=latitude1, label = polygon1_name),             # draw text labels
+            size = 2, color = "black",check_overlap = TRUE,fontface = "bold") +
+  ggtitle("March 2020 human mobility") +
+  theme(plot.title = element_text(size=14, face="bold"))+
+  maptheme
+  
+```
